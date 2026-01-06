@@ -31,6 +31,17 @@ The goal of this project is to implement tokenizers in C++ that match or exceed 
 - Balances vocabulary size with sequence length
 - Used in GPT-2, GPT-3, and many other models
 
+**Performance:**
+Only trained on 1mb of data, since it takes some time to train. I will revisit efficiency later. Currently it is O(n^2) for training and O(n) for encoding. After training to a vocabulary of 1000, I got the following results: 
+
+```
+My name is Rohan, I am a senior at University of Maryland, College Park.
+```
+
+```
+M y</w> n ame</w> is</w> R oh an ,</w> I</w> am</w> a</w> sen i or</w> at</w> Un iv er s ity</w> of</w> Mar y l and ,</w> Col le ge</w> P ark .</w>
+```
+
 ### 2. SentencePiece
 
 **Algorithm Overview:**

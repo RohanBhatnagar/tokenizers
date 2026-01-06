@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libtokenizers.a CMakeFiles/tokenizers.dir/src/bpe/bpe.cpp.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libtokenizers.a

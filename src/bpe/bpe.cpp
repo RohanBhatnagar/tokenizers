@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -7,28 +8,21 @@
 #include <sstream>
 #include <ranges>
 #include <filesystem>
+#include <unordered_set>
 
 #include "bpe.hpp"
 
-std::vector<std::string> vocab; 
+std::unordered_set<std::string> vocab;
 std::map<std::pair<std::string, std::string>, int> freqs; 
 std::vector<std::pair<std::string, std::string> > merges; 
+std::vector<std::string> training_tokens; 
 
-// helpers 
 namespace {
 
-    // preprocess each word into [c1 c2 c3 ... </w> ] and write to a file. 
-    void preprocess(const std::string& train_file, const std::string& preproc_file) {
+    void preprocess_train(const std::string& train_file) {
         std::ifstream file(train_file); 
-        std::ofstream outfile(preproc_file); 
 
-        if (!file) {
-            throw std::runtime_error("Unable to open training txt file");
-        }
-
-        if (!outfile) {
-            throw std::runtime_error("Unable to open preprocessed txt file");
-        }
+        if (!file) { throw std::runtime_error("Unable to open training txt file"); }
 
         std::string line;
 
@@ -37,12 +31,11 @@ namespace {
             std::string word; 
             while (ss >> word) {
                 for (size_t i = 0; i < word.size(); ++i) {
-                    outfile << word[i] << " "; 
+                    training_tokens.emplace_back(std::string(1, word[i])); 
                 }
-                outfile << "</w>\n"; 
+                training_tokens.emplace_back("</w>"); 
             }
         }
-        outfile.close(); 
         file.close(); 
     }
 
@@ -59,74 +52,81 @@ namespace {
     }
 }
 
-void count_freqs(const std::string& raw_data) {
-    std::ifstream raw(raw_data); 
-    if (!raw) {
-        throw std::runtime_error("Unable to open raw data file");
-    }
-    std::string line; 
-    while (std::getline(raw, line)) {
-        std::stringstream ss(line); 
-        std::string t1; 
-        ss >> t1; 
-        std::string t2;
-        while (ss >> t2) {
-            freqs[{t1, t2}]++;
-            t1 = t2; 
+void count_freqs() {  
+    auto n = training_tokens.size(); 
+    for (size_t i = 0; i < n; ++i) {
+        if (i + 1 < n && training_tokens[i] != "</w>") {
+            freqs[{training_tokens[i], training_tokens[i + 1]}]++; 
         }
-    }
-    
+    }  
 }
 
-// Streams new tokens into tmp file
-void apply_merge(const std::string& old) {
-    std::pair<std::string, std::string> merge = get_merge(); 
+void apply_merge_to(std::vector<std::string>& tokens, const std::pair<std::string, std::string>& merge, bool training) {
+    auto n = tokens.size();
+    size_t write_idx = 0;  
+    const std::string new_token = merge.first + merge.second; 
 
-    std::filesystem::path temp = old + ".tmp"; 
-
-    std::ifstream file(old); 
-    std::ofstream outfile(temp); 
-    
-    if (!file) {
-        throw std::runtime_error("Unable to open old txt file");
-    }
-    if (!outfile) {
-        throw std::runtime_error("Unable to open new txt file");
-    }
-
-    std::string line; 
-    while (std::getline(file, line)) {
-        std::stringstream ss(line); 
-        std::string t1; 
-        ss >> t1; 
-        std::string t2; 
-        while (ss >> t2) {
-            if (t1 == merge.first && t2 == merge.second) {
-                outfile << merge.first << merge.second << " "; 
-            } else {
-                outfile << t1 << " "; 
-            }
-            t1 = t2; 
+    for (size_t i = 0; i < n; ++i) {
+        if (i + 1 < n && tokens[i] == merge.first && tokens[i + 1] == merge.second) {
+            tokens[write_idx++] = new_token; 
+            ++i; 
+        } else {
+            tokens[write_idx++] = tokens[i]; 
         }
-        outfile << "</w> \n"; 
     }
-    outfile.close(); 
-    file.close(); 
 
-    merges.emplace_back(merge);
-    vocab.push_back(merge.first + merge.second);
-    std::filesystem::rename(temp, old); 
+    tokens.resize(write_idx); 
+    if (training) {
+        merges.emplace_back(merge); 
+        vocab.insert(new_token); 
+    }
 }
 
 void train(const std::string& raw_data, size_t vocab_size) {
-    std::string preproc = "preproc.txt"; 
-    preprocess(raw_data, preproc); 
-    while (vocab.size() < vocab_size) {
-        count_freqs(preproc); 
-        apply_merge(preproc); 
+    preprocess_train(raw_data); 
+    freqs.clear(); 
+    merges.clear(); 
+    vocab.clear(); 
+    std::string word;
+    std::ifstream corpus(raw_data); 
+    while (corpus >> word) {
+        for (char c : word) {
+            vocab.insert(std::string(1, c));
+        }
+        vocab.insert("</w>");
     }
+    while (vocab.size() < vocab_size) {
+        std::cout << "Vocab size: " << vocab.size() << std::endl; 
+        freqs.clear(); 
+        count_freqs(); 
+        auto m = get_merge();
+        if (m.first.empty()) break;     
+        apply_merge_to(training_tokens, m, true); 
+    }
+    std::cout << "Training complete" << std::endl; 
+    std::ofstream vocab_file("vocab.txt"); 
+    for (const auto& token : vocab) {
+        vocab_file << token << "\n"; 
+    }
+    vocab_file.close(); 
 }
 
-int main() {
-    train("raw_data.txt", 10000); 
+std::vector<std::string> tokenize(const std::string& text) {
+
+    std::stringstream ss(text); 
+    std::vector<std::string> tokenized; 
+    std::string word; 
+
+    while (ss >> word) {
+        for (auto c : word) {
+            tokenized.emplace_back(std::string(1, c)); 
+        }
+        tokenized.emplace_back("</w>"); 
+    }
+
+    // very inefficient, but okay for now. 
+    for (const auto& merge : merges) {
+        apply_merge_to(tokenized, merge, false); 
+    }
+    return tokenized; 
 }

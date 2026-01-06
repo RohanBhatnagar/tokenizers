@@ -4,23 +4,21 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <unordered_map>
-#include <algorithm>
-#include <fstream>
-#include <sstream>
+#include <map>
+#include <utility>
 
-void load_training_txt(const std::string& training_txt_file);
+// Count frequencies of adjacent token pairs in the training data
+void count_freqs();
 
-void train(const std::string& vocab_file);
+// Apply a merge operation to a token vector
+void apply_merge_to(std::vector<std::string>& tokens, 
+                    const std::pair<std::string, std::string>& merge, 
+                    bool training);
 
-void load_merges(const std::string& merges_file);
+// Train BPE on the given raw data file, building a vocabulary of the specified size
+void train(const std::string& raw_data, size_t vocab_size);
 
-std::vector<std::pair<std::string, std::string> > get_pairs(const std::vector<std::string>& tokens);
+// Tokenize text using the learned BPE merges
+std::vector<std::string> tokenize(const std::string& text);
 
-std::vector<std::string> encode_word(const std::string& word);
-
-std::vector<std::string> encode(const std::string& text);
-
-std::vector<int> tokens_to_ids(const std::vector<std::string>& tokens);
-
-#endif 
+#endif
