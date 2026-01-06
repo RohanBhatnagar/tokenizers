@@ -39,7 +39,7 @@ My name is Rohan, I am a senior at University of Maryland, College Park.
 ```
 
 ```
-M y</w> n ame</w> is</w> R oh an ,</w> I</w> am</w> a</w> sen i or</w> at</w> Un iv er s ity</w> of</w> Mar y l and ,</w> Col le ge</w> P ark .</w>
+M y</w> name</w> is</w> Ro h an ,</w> I</w> am</w> a</w> sen ior</w> at</w> University</w> of</w> Mar y land ,</w> College</w> Par k .</w> 
 ```
 
 ### 2. SentencePiece
@@ -66,9 +66,59 @@ SentencePiece is a language-independent tokenizer that treats text as a sequence
 - Used in T5, ALBERT, XLNet, Llama, and most modern LLMs
 - Supports multiple languages without modification
 
-### 3. WordPiece (Future)
-- Used in BERT
-- Similar to BPE but uses likelihood-based scoring instead of frequency
+### 3. WordPiece
+
+**Algorithm Overview:**
+WordPiece is a subword tokenization algorithm developed by Google, most famously used in BERT. Unlike BPE which uses frequency-based merging, WordPiece uses a **likelihood-based scoring function** to select which character sequences to merge. This makes it more statistically principled and often produces better tokenizations for language modeling tasks.
+
+**Training Process:**
+1. Initialize vocabulary with all unique characters (and special tokens like [CLS], [SEP], [UNK])
+2. For each potential merge candidate:
+   - Calculate the likelihood increase if we add this token to the vocabulary
+   - Score = (freq of merged token) / (freq of first part × freq of second part)
+3. Select the merge with the highest likelihood score
+4. Add the new token to the vocabulary
+5. Repeat steps 2-4 until reaching the desired vocabulary size
+
+**Scoring Function:**
+The key difference from BPE is the scoring metric:
+- **BPE:** Simply counts frequency of adjacent pairs
+- **WordPiece:** Uses `score = P(AB) / (P(A) × P(B))`
+  - This measures how much more likely the merged token is compared to random chance
+  - Favors merges that create meaningful subword units
+  - More aligned with language modeling objectives
+
+**Encoding Process:**
+1. Split input text into words (whitespace tokenization)
+2. For each word, use **greedy longest-match-first** algorithm:
+   - Try to match the longest possible subword from the vocabulary
+   - If no match, move to the next character and try again
+   - Mark continuation tokens with `##` prefix (e.g., "playing" → "play", "##ing")
+3. If a word cannot be fully tokenized, replace with [UNK]
+
+**Key Characteristics:**
+- **Likelihood-based:** More statistically motivated than frequency-based BPE
+- **Greedy longest-match:** Encoding uses different strategy than training
+- **Continuation markers:** `##` prefix distinguishes word-initial vs. word-internal tokens
+- **Better for MLM:** Optimized for masked language modeling tasks
+- **Used in BERT, DistilBERT, ELECTRA:** The standard for bidirectional transformers
+
+**Comparison with BPE:**
+| Aspect | BPE | WordPiece |
+|--------|-----|-----------|
+| Merge criterion | Frequency count | Likelihood score |
+| Encoding | Apply merges in order | Greedy longest-match |
+| Continuation | Special end token (`</w>`) | Prefix marker (`##`) |
+| Use case | Autoregressive models (GPT) | Masked LM (BERT) |
+| Training speed | Faster | Slightly slower |
+| Tokenization quality | Good | Often better for MLM |
+
+**Implementation Notes:**
+- Requires efficient longest-match search (trie or hash map)
+- Need to handle unknown words gracefully
+- Vocabulary typically includes special tokens: `[PAD]`, `[UNK]`, `[CLS]`, `[SEP]`, `[MASK]`
+- Case sensitivity is configurable (BERT uses uncased and cased variants)
+
 
 ## Performance Goals
 

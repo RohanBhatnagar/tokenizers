@@ -4,7 +4,7 @@
 #include <string>
 
 int main() {
-    train("wikitext2_1mb.txt", 1000); 
+    train("wikitext2_2mb.txt", 5000); 
 
     std::vector<std::string> tokens = tokenize("My name is Rohan, I am a senior at University of Maryland, College Park."); 
     for (const auto& token : tokens) {

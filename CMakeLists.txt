@@ -16,3 +16,26 @@ target_include_directories(tokenizers
 
 add_executable(tokenizer src/tokenizer.cpp)
 target_link_libraries(tokenizer PRIVATE tokenizers)
+
+# Testing
+enable_testing()
+
+# Fetch Google Test
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG v1.14.0
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+# Add test executable
+add_executable(test_bpe tests/test_bpe.cpp)
+target_link_libraries(test_bpe PRIVATE tokenizers GTest::gtest_main)
+
+# Discover tests
+include(GoogleTest)
+gtest_discover_tests(test_bpe)
+

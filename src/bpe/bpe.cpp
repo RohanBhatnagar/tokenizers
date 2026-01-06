@@ -19,6 +19,10 @@ std::vector<std::string> training_tokens;
 
 namespace {
 
+    bool has_eow(const std::string& text) {
+        return text.find("</w>") != std::string::npos;
+    }
+
     void preprocess_train(const std::string& train_file) {
         std::ifstream file(train_file); 
 
@@ -55,7 +59,7 @@ namespace {
 void count_freqs() {  
     auto n = training_tokens.size(); 
     for (size_t i = 0; i < n; ++i) {
-        if (i + 1 < n && training_tokens[i] != "</w>") {
+        if (i + 1 < n && !has_eow(training_tokens[i])) {
             freqs[{training_tokens[i], training_tokens[i + 1]}]++; 
         }
     }  
@@ -105,6 +109,7 @@ void train(const std::string& raw_data, size_t vocab_size) {
     }
     std::cout << "Training complete" << std::endl; 
     std::ofstream vocab_file("vocab.txt"); 
+    if (!vocab_file) { throw std::runtime_error("Unable to open training txt file"); }
     for (const auto& token : vocab) {
         vocab_file << token << "\n"; 
     }
