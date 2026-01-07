@@ -1,18 +1,12 @@
 # BPE Tokenizer (C++)
 
-A fast, efficient C++ implementation of Byte Pair Encoding (BPE) for subword tokenization.
-
-## What is BPE?
-
-Byte Pair Encoding is a data compression technique adapted for natural language processing. It's used in modern language models like GPT and BERT to handle rare words and create efficient subword vocabularies.
+A somewhat efficient C++ implementation of Byte Pair Encoding (BPE) for tokenization. Still short of the optimal algorithm, but implemented most of it. 
 
 ## Features
 
 - ✅ **Training**: Learn BPE merges from raw text data
 - ✅ **Tokenization**: Convert text into subword tokens using learned vocabulary
-- ✅ **Model Persistence**: Save and load trained models
-- ✅ **Word Boundary Preservation**: Proper handling of word boundaries with `</w>` markers
-- ✅ **Efficient Implementation**: Uses indexed heap for fast merge selection
+- ✅ **Model Persistence**: Save and load trained models (see bpe_model.txt)
 
 ## Quick Start
 
@@ -84,23 +78,8 @@ bpe-cpp/
 └── tests/                   # Unit tests
 ```
 
-## How It Works
-
-1. **Initialization**: Start with character-level vocabulary
-2. **Frequency Counting**: Count all adjacent token pairs
-3. **Iterative Merging**: 
-   - Find the most frequent pair
-   - Merge it into a new token
-   - Update frequencies
-   - Repeat until target vocabulary size is reached
-4. **Tokenization**: Apply learned merges in order to segment new text
-
 ## Requirements
 
 - C++20 or later
 - CMake 3.20+
 - AppleClang 14.0+ (or equivalent)
-
-## License
-
-MIT
