@@ -1,4 +1,0 @@
-#ifndef WORDPIECE_HPP
-#define WORDPIECE_HPP
-
-#endif // WORDPIECE_HPP

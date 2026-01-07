@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(tokenizers
     src/bpe/bpe.cpp
+    src/util/indexed_heap.cpp
 )
 
 target_include_directories(tokenizers
@@ -35,7 +36,11 @@ FetchContent_MakeAvailable(googletest)
 add_executable(test_bpe tests/test_bpe.cpp)
 target_link_libraries(test_bpe PRIVATE tokenizers GTest::gtest_main)
 
+add_executable(test_indexed_heap tests/test_indexed_heap.cpp)
+target_link_libraries(test_indexed_heap PRIVATE tokenizers GTest::gtest_main)
+
 # Discover tests
 include(GoogleTest)
 gtest_discover_tests(test_bpe)
+gtest_discover_tests(test_indexed_heap)
 

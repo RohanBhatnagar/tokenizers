@@ -18,6 +18,9 @@ void apply_merge_to(std::vector<std::string>& tokens,
 // Train BPE on the given raw data file, building a vocabulary of the specified size
 void train(const std::string& raw_data, size_t vocab_size);
 
+// Load a previously trained BPE model from file
+void load_model(const std::string& model_file);
+
 // Tokenize text using the learned BPE merges
 std::vector<std::string> tokenize(const std::string& text);
 
