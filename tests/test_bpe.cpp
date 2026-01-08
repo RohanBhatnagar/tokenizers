@@ -23,8 +23,8 @@ protected:
         if (std::filesystem::exists(test_corpus_file)) {
             std::filesystem::remove(test_corpus_file);
         }
-        if (std::filesystem::exists("vocab.txt")) {
-            std::filesystem::remove("vocab.txt");
+        if (std::filesystem::exists("bpe_model.txt")) {
+            std::filesystem::remove("bpe_model.txt");
         }
     }
 
@@ -43,15 +43,25 @@ TEST_F(BPETest, VocabularySizeIsCorrect) {
     size_t target_vocab_size = 50;
     train(test_corpus_file, target_vocab_size);
     
-    // Check that vocab.txt was created
-    EXPECT_TRUE(std::filesystem::exists("vocab.txt"));
+    // Check that bpe_model.txt was created
+    EXPECT_TRUE(std::filesystem::exists("bpe_model.txt"));
     
-    // Count lines in vocab.txt
-    std::ifstream vocab_file("vocab.txt");
+    // Count lines in bpe_model.txt (skip header lines)
+    std::ifstream vocab_file("bpe_model.txt");
     size_t line_count = 0;
     std::string line;
+    bool in_vocab_section = false;
     while (std::getline(vocab_file, line)) {
-        line_count++;
+        if (line == "VOCAB") {
+            in_vocab_section = true;
+            continue;
+        }
+        if (line == "MERGES") {
+            break;
+        }
+        if (in_vocab_section && !line.empty()) {
+            line_count++;
+        }
     }
     
     // Vocab size should be close to target (may be less if no more merges possible)
@@ -135,11 +145,21 @@ TEST_F(BPETest, LargeVocabSize) {
     });
     
     // Should stop when no more merges are possible
-    std::ifstream vocab_file("vocab.txt");
+    std::ifstream vocab_file("bpe_model.txt");
     size_t line_count = 0;
     std::string line;
+    bool in_vocab_section = false;
     while (std::getline(vocab_file, line)) {
-        line_count++;
+        if (line == "VOCAB") {
+            in_vocab_section = true;
+            continue;
+        }
+        if (line == "MERGES") {
+            break;
+        }
+        if (in_vocab_section && !line.empty()) {
+            line_count++;
+        }
     }
     
     // Should be much less than 10000

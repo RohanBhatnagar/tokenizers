@@ -2,6 +2,7 @@
  * IndexedHeap Implementation
  * A max heap with O(1) priority updates using node pointers
  * Nodes track their own heap position for efficient updates
+ * THIS WAS VIBECODED. 
  */
 #include "indexed_heap.hpp"
 #include <algorithm>

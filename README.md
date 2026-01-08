@@ -17,12 +17,12 @@ cmake -B build -S .
 cmake --build build
 ```
 
-### Train a Model
+### Train Tokenizer. 
 
 ```cpp
 #include <bpe.hpp>
 
-// Train on your text file. I used a 13mb text file, training took about 2 minutes. 
+// Train on your text file. I used a 13mb text file, training took about 2 minutes. There is still room for optimization. Occurrences should be a DLL for O(1) deletion of indices. 
 train("training_data.txt", 5000);  // Target vocab size: 5000
 ```
 
@@ -70,8 +70,7 @@ bpe-cpp/
 │   ├── bpe.hpp              # BPE interface
 │   └── indexed_heap.hpp     # Priority queue for merge selection
 ├── src/
-│   ├── bpe/
-│   │   └── bpe.cpp          # BPE implementation
+│   ├── bpe.cpp              # BPE implementation
 │   ├── util/
 │   │   └── indexed_heap.cpp # Heap implementation
 │   └── tokenizer.cpp        # Example usage

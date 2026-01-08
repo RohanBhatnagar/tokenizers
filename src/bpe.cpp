@@ -74,7 +74,10 @@ namespace {
 
     void preprocess_train(const std::string& train_file) {
         add_def_tokens(); 
-        std::ifstream file(train_file); 
+        std::ifstream file(train_file);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open training file: " + train_file);
+        }
         std::string line; 
         while (std::getline(file, line)) {
             std::stringstream ss(line); 
@@ -286,13 +289,18 @@ void train(const std::string& raw_data, size_t target_vocab_size) {
     count_freqs(train_tokens);    
     int merge_count = 0;
     while (vocab_size < target_vocab_size && !frequency_heap.empty()) {
-        std::pair<int, int> merge = get_merge(); 
-        
-        std::cout << "  Merge " << merge_count << ": " << id_to_vocab[merge.first] 
-                    << " + " << id_to_vocab[merge.second] << std::endl;
-        
-        apply_merge_to(train_tokens, merge); 
-        merge_count++;
+        try {
+            std::pair<int, int> merge = get_merge(); 
+            
+            std::cout << "  Merge " << merge_count << ": " << id_to_vocab[merge.first] 
+                        << " + " << id_to_vocab[merge.second] << std::endl;
+            
+            apply_merge_to(train_tokens, merge); 
+            merge_count++;
+        } catch (const std::runtime_error& e) {
+            std::cout << "  No more valid merges available. Stopping at vocab size: " << vocab_size << std::endl;
+            break;
+        }
     }
     save_model("bpe_model.txt");
     std::cout << std::endl;
@@ -373,8 +381,10 @@ std::vector<std::string> tokenize(const std::string& text) {
         std::vector<int> token_ids;
         for (size_t i = 0; i < word.size(); ++i) {
             std::string ch = word.substr(i, 1);
+            // If character not in vocab, add it
             if (vocab_to_id.find(ch) == vocab_to_id.end()) {
-                continue;
+                vocab_to_id[ch] = vocab_size;
+                id_to_vocab[vocab_size++] = ch;
             }
             token_ids.push_back(vocab_to_id[ch]);
         }
