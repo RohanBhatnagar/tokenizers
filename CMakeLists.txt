@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(tokenizers
     src/bpe.cpp
     src/util/indexed_heap.cpp
-    src/util/doubly_linked_list.cpp
 )
 
 target_include_directories(tokenizers
@@ -41,12 +40,8 @@ target_link_libraries(test_bpe PRIVATE tokenizers GTest::gtest_main)
 add_executable(test_indexed_heap tests/test_indexed_heap.cpp)
 target_link_libraries(test_indexed_heap PRIVATE tokenizers GTest::gtest_main)
 
-add_executable(test_doubly_linked_list tests/test_doubly_linked_list.cpp)
-target_link_libraries(test_doubly_linked_list PRIVATE tokenizers GTest::gtest_main)
-
 # Discover tests
 include(GoogleTest)
 gtest_discover_tests(test_bpe)
 gtest_discover_tests(test_indexed_heap)
-gtest_discover_tests(test_doubly_linked_list)
 

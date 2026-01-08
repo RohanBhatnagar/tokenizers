@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <list>
 #include <map>
 #include <algorithm>
 #include <fstream>
@@ -27,12 +28,11 @@ std::unordered_map<std::string, int> vocab_to_id;
 std::unordered_map<int, std::string> id_to_vocab; 
 int vocab_size = 0; 
 
-std::unordered_map<std::pair<int, int>, std::vector<int>, PairHash> occurrences; 
+std::unordered_map<std::pair<int, int>, std::list<int>, PairHash> occurrences; 
 std::vector<std::pair<int, int> > merges;
 
 IndexedHeap frequency_heap;
 std::map<std::pair<int, int>, HeapNode> pair_frequencies; 
-
 
 const std::string EOW = "</w>";
 const std::string EOS = "<|endoftext|>";
@@ -142,7 +142,7 @@ namespace {
                 HeapNode& node = it->second;
                 frequency_heap.updatePriority(&node, node.priority + 1);
             }
-            occurrences[tok_pair].emplace_back(i);
+            occurrences[tok_pair].push_back(i);
         }
     }
 
@@ -150,7 +150,7 @@ namespace {
         auto itOcc = occurrences.find(merge);
         if (itOcc == occurrences.end()) return;
 
-        std::vector<int> indices = itOcc->second;
+        std::list<int> indices = itOcc->second;
         
         int new_id = vocab_size;
         bool did_merge = false;
@@ -170,9 +170,9 @@ namespace {
                 std::pair<int,int> prev_pair(tokens[token.prev].tok, token.tok);
                 auto it = occurrences.find(prev_pair);
                 if (it != occurrences.end()) {
-                    auto& occ_vec = it->second;
-                    occ_vec.erase(std::remove(occ_vec.begin(), occ_vec.end(), token.prev), occ_vec.end());
-                    if (occ_vec.empty()) {
+                    auto& occ_list = it->second;
+                    occ_list.remove(token.prev);
+                    if (occ_list.empty()) {
                         occurrences.erase(it);
                     }
                 }
@@ -186,9 +186,9 @@ namespace {
                 std::pair<int,int> next_pair(next_token.tok, tokens[next_token.next].tok);
                 auto it = occurrences.find(next_pair);
                 if (it != occurrences.end()) {
-                    auto& occ_vec = it->second;
-                    occ_vec.erase(std::remove(occ_vec.begin(), occ_vec.end(), token.next), occ_vec.end());
-                    if (occ_vec.empty()) {
+                    auto& occ_list = it->second;
+                    occ_list.remove(token.next);
+                    if (occ_list.empty()) {
                         occurrences.erase(it);
                     }
                 }
@@ -204,7 +204,6 @@ namespace {
 
             // add new occs. 
             if (token.prev != -1 && tokens[token.prev].active) {
-                // Check if this new pair is valid (respects word boundaries)
                 bool prev_has_eow = id_to_vocab[tokens[token.prev].tok].find(EOW) != std::string::npos;
                 bool current_has_eow = id_to_vocab[token.tok].find(EOW) != std::string::npos;
                 bool current_is_eow = (token.tok == vocab_to_id[EOW]);
@@ -216,7 +215,6 @@ namespace {
                 }
             }
             if (token.next != -1 && tokens[token.next].active) {
-                // Check if this new pair is valid (respects word boundaries)
                 bool current_has_eow = id_to_vocab[token.tok].find(EOW) != std::string::npos;
                 bool next_has_eow = id_to_vocab[tokens[token.next].tok].find(EOW) != std::string::npos;
                 bool next_is_eow = (tokens[token.next].tok == vocab_to_id[EOW]);
