@@ -12,6 +12,9 @@
 #include <set>
 #include <unordered_set>
 #include <map>
+#include <memory>
+#include <chrono>
+#include <iomanip>
 
 #include <bpe.hpp>
 #include <indexed_heap.hpp>
@@ -32,12 +35,35 @@ std::unordered_map<std::pair<int, int>, std::list<int>, PairHash> occurrences;
 std::vector<std::pair<int, int> > merges;
 
 IndexedHeap frequency_heap;
-std::map<std::pair<int, int>, HeapNode> pair_frequencies; 
+std::unordered_map<std::pair<int, int>, std::unique_ptr<HeapNode>, PairHash> pair_frequencies; 
 
+// default tokens. 
 const std::string EOW = "</w>";
 const std::string EOS = "<|endoftext|>";
 
 namespace {
+
+    // Profiling data
+    struct ProfileData {
+        std::chrono::duration<double> bump_priority_time{0};
+        std::chrono::duration<double> count_freqs_time{0};
+        std::chrono::duration<double> apply_merge_time{0};
+        std::chrono::duration<double> get_merge_time{0};
+        long long bump_priority_calls = 0;
+        long long apply_merge_calls = 0;
+    } profile_data;
+
+    void print_profile_stats() {
+        std::cout << "\n=== Performance Profile ===\n";
+        std::cout << std::fixed << std::setprecision(3);
+        std::cout << "count_freqs:    " << profile_data.count_freqs_time.count() << "s\n";
+        std::cout << "get_merge:      " << profile_data.get_merge_time.count() << "s\n";
+        std::cout << "apply_merge:    " << profile_data.apply_merge_time.count() << "s (" 
+                  << profile_data.apply_merge_calls << " calls)\n";
+        std::cout << "bump_priority:  " << profile_data.bump_priority_time.count() << "s (" 
+                  << profile_data.bump_priority_calls << " calls)\n";
+        std::cout << "===========================\n\n";
+    }
 
     void add_def_tokens() {
         vocab_to_id[EOW] = vocab_size; 
@@ -46,7 +72,7 @@ namespace {
         id_to_vocab[vocab_size++] = EOS; 
     }
 
-    // DLL within a vector. 
+    // DLL within a fixed size vector. 
     struct DLLNode {
         int tok; 
         int prev; 
@@ -54,19 +80,20 @@ namespace {
         bool active; 
     };
 
-    inline void bump_priority(const std::pair<int,int>& p, int delta) {
+    void bump_priority(const std::pair<int,int>& p, int delta) {
         auto it = pair_frequencies.find(p);
         if (it == pair_frequencies.end()) {
-            HeapNode& node = pair_frequencies[p];
-            node.tok_ids = p;
-            node.priority = 0;
-            frequency_heap.push(&node); // inserts into heap
-            it = pair_frequencies.find(p);
+            auto node_ptr = std::make_unique<HeapNode>();
+            node_ptr->tok_ids = p;
+            node_ptr->priority = 0;
+            frequency_heap.push(node_ptr.get()); // inserts into heap
+            auto insert_result = pair_frequencies.insert({p, std::move(node_ptr)});
+            it = insert_result.first;  // Use iterator from insert, not redundant find
         }
-        HeapNode& node = it->second;
-        int newPri = node.priority + delta;
+        HeapNode* node = it->second.get();
+        int newPri = node->priority + delta;
         if (newPri < 0) newPri = 0;
-        frequency_heap.updatePriority(&node, newPri);
+        frequency_heap.updatePriority(node, newPri);
     }
 
 
@@ -124,33 +151,42 @@ namespace {
     }
 
     void count_freqs(const std::vector<DLLNode>& tokens) {
+        const int EOW_ID = vocab_to_id[EOW];
         size_t n = tokens.size(); 
         for (size_t i = 0; i < n; ++i) {
             const DLLNode& token = tokens[i];
             if (token.next == -1) continue;
-            if (id_to_vocab[token.tok].find(EOW) != std::string::npos) continue;
-            if (tokens[token.next].tok == vocab_to_id[EOW]) continue;
+            if (token.tok == EOW_ID) continue;
+            if (tokens[token.next].tok == EOW_ID) continue;
             
             std::pair<int, int> tok_pair(token.tok, tokens[token.next].tok);
             auto it = pair_frequencies.find(tok_pair);
             if (it == pair_frequencies.end()) {
-                HeapNode& node = pair_frequencies[tok_pair]; 
-                node.tok_ids = std::make_pair(tok_pair.first, tok_pair.second);
-                node.priority = 1;
-                frequency_heap.push(&node); 
+                auto node_ptr = std::make_unique<HeapNode>();
+                node_ptr->tok_ids = std::make_pair(tok_pair.first, tok_pair.second);
+                node_ptr->priority = 1;
+                frequency_heap.push(node_ptr.get());
+                pair_frequencies[tok_pair] = std::move(node_ptr);
             } else {
-                HeapNode& node = it->second;
-                frequency_heap.updatePriority(&node, node.priority + 1);
+                HeapNode* node = it->second.get();
+                frequency_heap.updatePriority(node, node->priority + 1);
             }
             occurrences[tok_pair].push_back(i);
         }
     }
 
     void apply_merge_to(std::vector<DLLNode>& tokens, const std::pair<int,int>& merge) {
+        auto start = std::chrono::high_resolution_clock::now();
+        profile_data.apply_merge_calls++;
+        
         auto itOcc = occurrences.find(merge);
-        if (itOcc == occurrences.end()) return;
+        if (itOcc == occurrences.end()) {
+            auto end = std::chrono::high_resolution_clock::now();
+            profile_data.apply_merge_time += (end - start);
+            return;
+        }
 
-        std::list<int> indices = itOcc->second;
+        const std::list<int>& indices = itOcc->second;
         
         int new_id = vocab_size;
         bool did_merge = false;
@@ -203,23 +239,18 @@ namespace {
             next_token.active = false;
 
             // add new occs. 
+            const int EOW_ID = vocab_to_id[EOW];  // Cache for fast comparison
             if (token.prev != -1 && tokens[token.prev].active) {
-                bool prev_has_eow = id_to_vocab[tokens[token.prev].tok].find(EOW) != std::string::npos;
-                bool current_has_eow = id_to_vocab[token.tok].find(EOW) != std::string::npos;
-                bool current_is_eow = (token.tok == vocab_to_id[EOW]);
-                
-                if (!prev_has_eow && !current_has_eow && !current_is_eow) {
+                // Only check if tokens are NOT the EOW token (fast integer comparison)
+                if (tokens[token.prev].tok != EOW_ID && token.tok != EOW_ID) {
                     std::pair<int,int> new_prev_pair(tokens[token.prev].tok, token.tok);
                     bump_priority(new_prev_pair, +1);
                     occurrences[new_prev_pair].push_back(token.prev);
                 }
             }
             if (token.next != -1 && tokens[token.next].active) {
-                bool current_has_eow = id_to_vocab[token.tok].find(EOW) != std::string::npos;
-                bool next_has_eow = id_to_vocab[tokens[token.next].tok].find(EOW) != std::string::npos;
-                bool next_is_eow = (tokens[token.next].tok == vocab_to_id[EOW]);
+                if (token.tok != EOW_ID && tokens[token.next].tok != EOW_ID) {
                 
-                if (!current_has_eow && !next_has_eow && !next_is_eow) {
                     std::pair<int,int> new_next_pair(token.tok, tokens[token.next].tok);
                     bump_priority(new_next_pair, +1);
                     occurrences[new_next_pair].push_back(idx);
@@ -227,7 +258,11 @@ namespace {
             }
         }
 
-        if (!did_merge) return;
+        if (!did_merge) {
+            auto end = std::chrono::high_resolution_clock::now();
+            profile_data.apply_merge_time += (end - start);
+            return;
+        }
 
         // update vocab
         std::string new_token_str = id_to_vocab[merge.first] + id_to_vocab[merge.second];
@@ -237,6 +272,9 @@ namespace {
 
         merges.push_back(merge);
         occurrences.erase(merge);
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        profile_data.apply_merge_time += (end - start);
     }
 
 
@@ -258,14 +296,12 @@ void save_model(const std::string& output_file) {
         throw std::runtime_error("Failed to open output file: " + output_file);
     }
     
-    // Write vocabulary
     out << "VOCAB_SIZE " << vocab_size << "\n";
     out << "VOCAB\n";
     for (const auto& pair : vocab_to_id) {
         out << pair.first << "\t" << pair.second << "\n";
     }
     
-    // Write merges in order (critical for tokenization!)
     out << "MERGES\n";
     for (const auto& merge : merges) {
         std::string first_tok = id_to_vocab[merge.first];
@@ -290,7 +326,7 @@ void train(const std::string& raw_data, size_t target_vocab_size) {
         try {
             std::pair<int, int> merge = get_merge(); 
             
-            std::cout << "  Merge " << merge_count << ": " << id_to_vocab[merge.first] 
+                std::cout << "  Merge " << merge_count << ": " << id_to_vocab[merge.first] 
                         << " + " << id_to_vocab[merge.second] << std::endl;
             
             apply_merge_to(train_tokens, merge); 
@@ -300,6 +336,8 @@ void train(const std::string& raw_data, size_t target_vocab_size) {
             break;
         }
     }
+    
+    print_profile_stats();
     save_model("bpe_model.txt");
     std::cout << std::endl;
     std::cout << "=== Training Complete ===" << std::endl;
